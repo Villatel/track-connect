@@ -208,7 +208,7 @@ function sync_units(){
     $size = ($_POST['size'])?$_POST['size']:25;
 
     require_once( __DIR__ . '/includes/api/request.php' );
-    $request = new plugins\api\pluginApi($options['wp_listings_domain'],$options['wp_listings_token'], $options['wp_listings_secret']);
+    $request = new plugins\api\pluginApi();
     $sync =  $request->getUnits($page,$size,$options['wp_listings_complex_node']);
 
     wp_send_json( $sync );
