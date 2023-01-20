@@ -154,6 +154,22 @@ class pluginApi{
                     $occupancy = $unit->occupancy;
                 }
 
+                //set unit prices
+                $unitPricing = $this->get_aggregate_availability_pricing_data($unit->id);
+                $unitPrices = [];
+                foreach ($unitPricing as $unitPrice) {
+                    $unitPrices['min'][] = $unitPrice['rate']['min'];
+                    $unitPrices['max'][] = $unitPrice['rate']['max'];
+                }
+                $unitPrices['min'] = array_unique($unitPrices['min']);
+                $unitPrices['max'] = array_unique($unitPrices['max']);
+                sort($unitPrices['min']);
+                rsort($unitPrices['max']);
+
+                $unit->min_rate = array_shift($unitPrices['min']);
+                $unit->max_rate = array_shift($unitPrices['max']);
+
+
                 $unit->images = [];
                 $unitImages = $this->request([
                     'endpoint' => "/api/pms/units/$unit->id/images?size=-1"
@@ -580,6 +596,48 @@ class pluginApi{
             ];
         }
         return false;
+    }
+
+    public function get_aggregate_availability_pricing_data($unit_id)
+    {
+        $pricing = $this->get_unit_pricing($unit_id);
+        $availability = $this->get_unit_availability($unit_id);
+        $rates = (array)$pricing->rateTypes[0]->rates;
+        $rates_array = array();
+        foreach ($availability as $idx => $day) {
+            $date = $day->date;
+            if (!isset($rates[$date])) {
+                continue;
+            }
+            $rate = (array)$rates[$date];
+            $rate['avail'] = $day->count;
+            $rate['price'] = $rate['rate'];
+            $rate['rate'] = array(
+                'min' => $rate['rate'],
+                'max' => $rate['rate']
+            );
+            $rate['min'] = $rate['stay']->min ?? 0;
+            $rate['depart'] = 0;
+            $rates_array[$date] = $rate;
+        }
+        return $rates_array;
+    }
+
+    public function get_unit_pricing($unit_id)
+    {
+        $max_booking_days = env('TRACK_MAX_BOOKING_DAYS') ?: '720'; // default to 720 days
+        $end_date = date('Y-m-d', strtotime('+'.$max_booking_days.' days'));
+
+        return $this->request([
+            'endpoint' => "/api/pms/units/$unit_id/pricing?"."endDate=$end_date",
+        ]);
+    }
+
+    public function get_unit_availability($unit_id)
+    {
+        return $this->request([
+            'endpoint' => "/api/v2/pms/units/$unit_id/availability"
+        ]);
     }
 
     public function rebuildTaxonomies()
