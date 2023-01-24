@@ -68,16 +68,6 @@ class pluginApi{
             ).") ) "
         );
 
-        if (!empty($posts)) {
-            foreach ($posts as $post) {
-                $wpdb->update(
-                    $wpdb->posts,
-                    ['post_status' => 'draft'],
-                    ['ID' => $post->id],
-                    ['%s'], ['%d']
-                );
-            }
-        }
 
         static $resultUnitIds = [];
         $resultUnitIds = array_merge($resultUnitIds, $unitIds);
@@ -161,8 +151,8 @@ class pluginApi{
                     $unitPrices['min'][] = $unitPrice['rate']['min'];
                     $unitPrices['max'][] = $unitPrice['rate']['max'];
                 }
-                $unitPrices['min'] = array_unique($unitPrices['min']);
-                $unitPrices['max'] = array_unique($unitPrices['max']);
+                $unitPrices['min'] = $unitPrices['min'] ? array_unique($unitPrices['min']) : [];
+                $unitPrices['max'] = $unitPrices['max'] ? array_unique($unitPrices['max']) : [];
                 sort($unitPrices['min']);
                 rsort($unitPrices['max']);
 
@@ -370,7 +360,7 @@ class pluginApi{
                     if (!$custom_desc) {
                         $wpdb->update(
                             $wpdb->posts,
-                            ['post_content' => $unit->description],
+                            ['post_content' => $unit->longDescription],
                             ['ID' => $post_id],
                             ['%s'], ['%d']
                         );
@@ -395,6 +385,12 @@ class pluginApi{
                             }
                         }
                     }
+
+
+                    //Delete previous if exist
+                    $wpdb->query(
+                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post_id."' AND term_taxonomy_id = '".$activeTerm."';"
+                    );
 
                     // Update the Status;
                     $wpdb->insert(
@@ -444,7 +440,7 @@ class pluginApi{
                                 $today,
                                 $today,
                                 $unit->name,
-                                'publish',
+                                $isDraft ? 'draft' : 'publish',
                                 $this->slugify($unit->name),
                                 'listing',
                                 $group_id,
@@ -456,7 +452,7 @@ class pluginApi{
 
                     $wpdb->update(
                         $wpdb->posts,
-                        ['post_content' => $unit->description],
+                        ['post_content' => $unit->longDescription],
                         ['ID' => $post_id],
                         ['%s'], ['%d']
                     );
@@ -658,88 +654,121 @@ class pluginApi{
         );
     }
 
-    public function getUnitNodes(){
+    public function getUnitNodes()
+    {
         global $wpdb;
 
-        $nodes = wp_remote_post($this->endpoint.'/api/wordpress/unit-nodes/',
-		array(
-			'timeout'     => 500,
-            'user-agent' => apply_filters( 'http_headers_useragent', 'WordPress/' . get_bloginfo( 'version' ) . '; TrackConnect/'. WP_LISTINGS_VERSION .'; ' . get_bloginfo( 'url' ) ),
-			'body' => array(
-    			'token'     => $this->token
-			    )
-			)
-        );
+        $nodes = $this->request([
+            'endpoint' => "/api/pms/nodes"
+        ]);
 
         $wpdb->query("UPDATE ".$wpdb->prefix."track_node_types set active = 0");
 
-        if(isset(json_decode($nodes['body'])->response)){
-        foreach(json_decode($nodes['body'])->response as $nodeId => $node){
-            $nodeType = $wpdb->get_row("SELECT id FROM ".$wpdb->prefix."track_node_types WHERE type_id = '".$node->typeid."';");
-            if(!$nodeType){
-                $wpdb->insert( $wpdb->prefix.'track_node_types',
-                    array( 'name' => $node->typename, 'type_id' => $node->typeid, 'active' => 1 ),
-                    array( '%s', '%d' , '%d' ) );
+        if (!isset($nodes->errors) && isset($nodes->_embedded->nodes)) {
+            foreach ($nodes->_embedded->nodes as $node) {
+                $nodeType = $wpdb->get_row(
+                    "SELECT id FROM ".$wpdb->prefix."track_node_types WHERE type_id = '".$node->_embedded->type->id."';"
+                );
 
-            }else{
-                $wpdb->update( $wpdb->prefix.'track_node_types',
-                    array( 'name' => $node->typename, 'active' => 1 ),
-                    array( 'type_id' => $node->typeid ),
-                    array( '%s', '%d' ), array( '%d' ) );
-            }
-
-            $term = $wpdb->get_row("SELECT term_id FROM ".$wpdb->prefix."terms WHERE node_id = '".$nodeId."';");
-            if(!$term){
-                $wpdb->insert( $wpdb->prefix.'terms',
-                    array( 'name' => $node->name, 'node_id' => $nodeId, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ),
-                    array( '%s', '%d' , '%d', '%s' ) );
-                $termId = $wpdb->insert_id;
-
-                $wpdb->insert( $wpdb->prefix.'term_taxonomy',
-                    array( 'term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0 ),
-                    array( '%d', '%s', '%d' ) );
-                $term_taxonomy_id = $wpdb->insert_id;
-
-                if(isset($node->units)){
-                    foreach($node->units as $unitId){
-                        $post = $wpdb->get_row("SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unitId."';");
-                        if($post){
-                            $wpdb->query("DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term_taxonomy_id."';");
-                            $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term_taxonomy_id ),
-                                array( '%d', '%d' ) );
-                        }
-                    }
+                if (!$nodeType) {
+                    $wpdb->insert(
+                        $wpdb->prefix.'track_node_types',
+                        [
+                            'name' => $node->_embedded->type->name,
+                            'type_id' => $node->_embedded->type->id,
+                            'active' => 1
+                        ],
+                        ['%s', '%d', '%d']
+                    );
+                } else {
+                    $wpdb->update(
+                        $wpdb->prefix.'track_node_types',
+                        ['name' => $node->_embedded->type->name, 'active' => 1],
+                        ['type_id' => $node->_embedded->type->id],
+                        ['%s', '%d'], ['%d']
+                    );
                 }
 
-            }else{
-                $wpdb->update( $wpdb->prefix.'terms',
-                    array( 'name' => $node->name, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ),
-                    array( 'node_id' => $nodeId ),
-                    array( '%s', '%d', '%s' ), array( '%d' ) );
+                $term = $wpdb->get_row("SELECT term_id FROM ".$wpdb->prefix."terms WHERE node_id = '".$node->id."';");
+                if (!$term) {
+                    $wpdb->insert(
+                        $wpdb->prefix.'terms',
+                        [
+                            'name' => $node->name,
+                            'node_id' => $node->id,
+                            'node_type_id' => $node->_embedded->type->id,
+                            'slug' => $this->slugify($node->name)
+                        ],
+                        ['%s', '%d', '%d', '%s']
+                    );
+                    $termId = $wpdb->insert_id;
 
-                $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
+                    $wpdb->insert(
+                        $wpdb->prefix.'term_taxonomy',
+                        ['term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0],
+                        ['%d', '%s', '%d']
+                    );
+                    $term_taxonomy_id = $wpdb->insert_id;
+
+                    $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
+                    if (isset($nodeUnits) && $nodeUnits->status !== 404) {
+                        foreach ($nodeUnits->_embedded->units as $unit) {
+                            $post = $wpdb->get_row(
+                                "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."';"
+                            );
+                            if ($post) {
+                                $wpdb->query(
+                                    "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term_taxonomy_id."';"
+                                );
+                                $wpdb->insert(
+                                    $wpdb->prefix.'term_relationships',
+                                    ['object_id' => $post->ID, 'term_taxonomy_id' => $term_taxonomy_id],
+                                    ['%d', '%d']
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    $wpdb->update(
+                        $wpdb->prefix.'terms',
+                        [
+                            'name' => $node->name,
+                            'node_type_id' => $node->_embedded->type->id,
+                            'slug' => $this->slugify($node->name)
+                        ],
+                        ['node_id' => $node->id],
+                        ['%s', '%d', '%s'], ['%d']
+                    );
+
+                    $term = $wpdb->get_row(
+                        "SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
                 JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
-                WHERE node_id = '".$nodeId."'  
-                LIMIT 1;");
+                WHERE node_id = '".$node->id."'  
+                LIMIT 1;"
+                    );
 
-                if($term){
-                    if(isset($node->units)){
-                        foreach($node->units as $unitId){
-                            $post = $wpdb->get_row("SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unitId."';");
-                            if($post){
-                                $wpdb->query("DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term->term_taxonomy_id."';");
-                                $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                    array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id ),
-                                    array( '%d', '%d' ) );
+                    if ($term) {
+                        $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
+                        if (isset($nodeUnits) && $nodeUnits->status !== 404) {
+                            foreach ($nodeUnits->_embedded->units as $unit) {
+                                $post = $wpdb->get_row(
+                                    "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."';"
+                                );
+                                if ($post) {
+                                    $wpdb->query(
+                                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term->term_taxonomy_id."';"
+                                    );
+                                    $wpdb->insert(
+                                        $wpdb->prefix.'term_relationships',
+                                        ['object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id],
+                                        ['%d', '%d']
+                                    );
+                                }
                             }
                         }
                     }
                 }
             }
-
-
-        }
         }
     }
 
