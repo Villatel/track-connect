@@ -130,11 +130,15 @@ class pluginApi{
             foreach ($units->_embedded->units as $unit) {
                 $isDraft = true;
 
-                if ($unit->isActive){
-                    $isDraft = false;
-                    if (!$unit->_embedded->node->custom->pms_nodes_website_activate) {
-                        $isDraft = true;
+                if (isset($unit->isActive)){
+                    if ($unit->isActive) {
+                        $isDraft = false;
+                        if (!$unit->_embedded->node->custom->pms_nodes_website_activate) {
+                            $isDraft = true;
+                        }
                     }
+                } else {
+                    $isDraft = false;
                 }
 
                 $count++;
@@ -167,11 +171,12 @@ class pluginApi{
 
                 foreach ($unitImages->_embedded->images as $image) {
                     $unit->images [] = (object)[
-                        'url' => $image->url,
-                        'text' => $image->caption,
+                        'url' => $image->original,
+                        'text' => $image->name,
                         'id' => $image->id,
                         'rank' => $image->order,
-                        'type' => stristr($image->type, '/', true)
+//                        'type' => stristr($image->type, '/', true)
+                        'type' => false
                     ];
                 }
 
@@ -182,10 +187,10 @@ class pluginApi{
                 }
                 $today = date('Y-m-d H:i:s');
 
-                $unit->amenities = [];
-                foreach ($unit->amenitiesIds as $unitAmenityId) {
-                    $unit->amenities [] = $amenities[$unitAmenityId];
-                }
+//                $unit->amenities = [];
+//                foreach ($unit->amenitiesIds as $unitAmenityId) {
+//                    $unit->amenities [] = $amenities[$unitAmenityId];
+//                }
 
                 $post = $wpdb->get_row(
                     "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_listing_unit_id' AND meta_value = '".$unit->id."' LIMIT 1;"
@@ -296,8 +301,8 @@ class pluginApi{
                                 $post_id,'_listing_complex_id', $unit->nodeId,
                                 $post_id,'_listing_complex_parent', $parent,
 
-                                $post_id,'_listing_lodging_type', $unit->lodgingTypeId ?? null,
-                                $post_id,'_listing_lodging_type_name', $unit->lodgingTypeId ? $lodgingTypes[$unit->lodgingTypeId] : null,
+                                $post_id,'_listing_lodging_type', $unit->lodgingType->id ?? null,
+                                $post_id,'_listing_lodging_type_name', $unit->lodgingType->id ? $lodgingTypes[$unit->lodgingType->id] : null,
                                 $post_id,'_listing_overview', $unit->shortDescription ?? null,
                                 $post_id,'_listing_bed_types', json_encode($unit->bedTypes),
 
@@ -340,7 +345,7 @@ class pluginApi{
 
                     if (isset($unit->lodgingType) && isset($unit->lodgingType->name)) {
                         update_post_meta($post_id, '_listing_lodging_type_'.$unit->lodgingType->id, $unit->lodgingType->id);
-                        $lodgingTypes[$unit->lodgingtype] = $unit->lodgingType->name;
+                        $lodgingTypes[$unit->lodgingType->id] = $unit->lodgingType->name;
                     }
 
                     $my_post = [
@@ -542,9 +547,9 @@ class pluginApi{
                             ]
                         ));
 
-                    if (isset($unit->lodgingtype) && isset($unit->lodgingtypename)) {
-                        update_post_meta($post_id, '_listing_lodging_type_'.$unit->lodgingtype, $unit->lodgingtype);
-                        $lodgingTypes[$unit->lodgingtype] = $unit->lodgingtypename;
+                    if (isset($unit->lodgingtype) && isset($unit->lodgingType->name)) {
+                        update_post_meta($post_id, '_listing_lodging_type_'.$unit->lodgingType->id, $unit->lodgingType->id);
+                        $lodgingTypes[$unit->lodgingType->id] = $unit->lodgingType->name;
                     }
 
                     // Create image
@@ -787,7 +792,7 @@ class pluginApi{
             $amenitiesResult [$amenity->id] = (object)[
                 'name' => $amenity->name,
                 'id' => $amenity->id,
-                'type' => $amenity->group->name,
+                'type' => $amenity->groupName,
             ];
 
             $amenityId = $wpdb->get_row(
@@ -800,7 +805,7 @@ class pluginApi{
                         'active' => 1,
                         'name' => $amenity->name,
                         'amenity_id' => $amenity->id,
-                        'group_name' => $amenity->group->name,
+                        'group_name' => $amenity->groupName,
                         'group_id' => $amenity->groupId
                     ],
                     ['%d', '%s', '%d', '%s', '%d']
@@ -812,7 +817,7 @@ class pluginApi{
                         'active' => 1,
                         'name' => $amenity->name,
                         'group_id' => $amenity->groupId,
-                        'group_name' => $amenity->group->name
+                        'group_name' => $amenity->groupName
                     ],
                     ['amenity_id' => $amenity->id],
                     ['%d', '%s', '%d', '%s'], ['%d']
@@ -836,7 +841,7 @@ class pluginApi{
                     [
                         'term_id' => $term->term_id,
                         'taxonomy' => 'features',
-                        'description' => $amenity->group->name,
+                        'description' => $amenity->groupName,
                         'parent' => 0
                     ],
                     ['%d', '%s', '%s', '%d']
@@ -855,7 +860,7 @@ class pluginApi{
                 if ($amenityTax) {
                     $wpdb->update(
                         $wpdb->prefix.'term_taxonomy',
-                        ['description' => $amenity->group->name],
+                        ['description' => $amenity->groupName],
                         ['term_id' => $term->term_id],
                         ['%s'], ['%d']
                     );
@@ -865,7 +870,7 @@ class pluginApi{
                         [
                             'term_id' => $term->term_id,
                             'taxonomy' => 'features',
-                            'description' => $amenity->group->name,
+                            'description' => $amenity->groupName,
                             'parent' => 0
                         ],
                         ['%d', '%s', '%s', '%d']
