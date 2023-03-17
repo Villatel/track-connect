@@ -12,12 +12,12 @@ global $wpdb;
 	<div id="poststuff" class="metabox-holder has-right-sidebar">
 		<div id="side-info-column" class="inner-sidebar">
 		<?php do_meta_boxes('wp-listings-options', 'side', null); ?>
-		</div>               
-        
+		</div>
+
         <div id="post-body">
             <div id="post-body-content" class="has-sidebar-content">
-                
-										
+
+
             	<?php $options = get_option('plugin_wp_listings_settings');
 
             	if ( !isset($options['wp_listings_stylesheet_load']) ) {
@@ -40,8 +40,8 @@ global $wpdb;
 				}
 
             	?>
-            	
-                
+
+
             	<h2>Include CSS?</h2>
 				<p>Here you can deregister the WP Listings CSS files and move to your theme's css file for ease of customization</p>
 				<?php
@@ -52,11 +52,11 @@ global $wpdb;
 				?>
 				<form action="options.php" method="post" id="wp-listings-stylesheet-options-form">
 					<?php settings_fields('wp_listings_options'); ?>
-										                
+
 					<?php echo '<h4><input name="plugin_wp_listings_settings[wp_listings_stylesheet_load]" id="wp_listings_stylesheet_load" type="checkbox" value="1" class="code" ' . checked(1, $options['wp_listings_stylesheet_load'], false ) . ' /> Deregister WP Listings main CSS (wp-listings.css)?</h4>'; ?>
 
 					<?php echo '<h4><input name="plugin_wp_listings_settings[wp_listings_widgets_stylesheet_load]" id="wp_listings_widgets_stylesheet_load" type="checkbox" value="1" class="code" ' . checked(1, $options['wp_listings_widgets_stylesheet_load'], false ) . ' /> Deregister WP Listings widgets CSS (wp-listings-widgets.css)?</h4><hr>'; ?>
-                    
+
                     <h2>Track PM Settings</h2>
                     <?php
     					_e("<p>Domain code used in Track</p>", 'wp_listings' );
@@ -74,19 +74,19 @@ global $wpdb;
                     <?php
     					_e("<p>Complex Node (for grouping listings)</p>", 'wp_listings' );
     					$nodeTypes = $wpdb->get_results("SELECT type_id as id, name FROM ".$wpdb->prefix."track_node_types;");
-    				?> 
-    				<h4>Node: 
+    				?>
+    				<h4>Node:
         				<select name="plugin_wp_listings_settings[wp_listings_complex_node]" id="wp_listings_complex_node">
             				<option value="0">None</option>
         				<?php foreach($nodeTypes as $type): ?>
         				     <option <?=($options['wp_listings_complex_node'] == $type->id)?"SELECTED":""; ?> value="<?=$type->id?>"><?=$type->name?></option>
         				<?php endforeach; ?>
                         </select>
-        				
+
     				</h4>
-                    
-                    <?php echo '<h4><input name="plugin_wp_listings_settings[wp_listings_force_sidebar]" id="wp_listings_force_sidebar" type="checkbox" value="1" class="code" ' . checked(1, $options['wp_listings_force_sidebar'], false ) . ' /> Override sidebar with custom Track Connect widget area?</h4>'; ?> 
-                    
+
+                    <?php echo '<h4><input name="plugin_wp_listings_settings[wp_listings_force_sidebar]" id="wp_listings_force_sidebar" type="checkbox" value="1" class="code" ' . checked(1, $options['wp_listings_force_sidebar'], false ) . ' /> Override sidebar with custom Track Connect widget area?</h4>'; ?>
+
 					<?php
 					_e("<h2>Default State</h2><p>You can enter a default state that will automatically be output on template pages and widgets that show the state. When you are create a listing and leave the state field empty, the default entered below will be shown. You can override the default on each listing by entering a value into the state field.</p>", 'wp_listings' );
 				    echo '<h4>Default State: <input name="plugin_wp_listings_settings[wp_listings_default_state]" id="wp_listings_default_state" type="text" value="' . $options['wp_listings_default_state'] . '" size="1" /></h4><hr>';
@@ -102,22 +102,8 @@ global $wpdb;
 					<p>Don't forget to <a href="../wp-admin/options-permalink.php">reset your permalinks</a> if you change the slug.</p>
 					<input name="submit" class="button-primary" type="submit" value="<?php esc_attr_e('Save Settings'); ?>" />
 				</form>
-				
-				
-				<h2>Track PM Sync</h2>
-				<?php if($options['wp_listings_domain'] != '' && $options['wp_listings_token'] != ''): ?>
-                    <a href="#TB_inline?width=400&height=350&inlineId=unit-sync" id="sync-btn" class="thickbox">Sync Units</a>
-                    <?php if($options['wp_listings_complex_node'] > 0): ?>
-                        <br><br>
-                        <a href="#TB_inline?width=400&height=350&inlineId=complex-sync" id="complex-btn" class="thickbox">Sync Complexes</a>
-                    <?php endif; ?>
-                <?php else: ?>
-                    <h4>A domain and token is required to be saved above to sync units.</h4>
-                <?php endif; ?>
-                
-				
-				
-            </div>    
+
+            </div>
         </div>
     </div>
 </div>
@@ -127,7 +113,7 @@ global $wpdb;
 	margin-bottom:20px;
 }
 #progressyears {
-	float:left;	
+	float:left;
 	font-weight:bold;
 	font-size:14px;
 	padding-top:5px;
@@ -158,7 +144,7 @@ global $wpdb;
     </div>
 </div>
 
-<input type="hidden" id="total-units" value="0">  
+<input type="hidden" id="total-units" value="0">
 <script>
 $j = jQuery.noConflict();
 var x = 0;
@@ -180,7 +166,7 @@ $j('#sync-btn').click(function () {
             }
             $j('#sync-msg').append(units+" units have been found.");
             $j('#total-units').val(units);
-            loopArray(pages);             
+            loopArray(pages);
         },
         error: function (d) {
              x = 0;
@@ -192,10 +178,10 @@ $j('#sync-btn').click(function () {
             }
             $j('#sync-msg').append(units+" units have been found.");
             $j('#total-units').val(units);
-            loopArray(pages); 
+            loopArray(pages);
         }
-        
-    });  
+
+    });
 });
 
 var loopArray = function(pages) {
@@ -205,11 +191,11 @@ var loopArray = function(pages) {
 
         // any more items in array? continue loop
         if(x < pages.length) {
-            loopArray(pages); 
+            loopArray(pages);
         }else{
-            finalizeSync();        
+            finalizeSync();
         }
-    }); 
+    });
 }
 
 function customAlert(page,callback) {
@@ -231,7 +217,7 @@ function customAlert(page,callback) {
             $j('#progressbar').progressbar({
                 value: bar
             });
-            
+
             //$j('#sync-msg').append('<br>'+d.updated+' units updated.');
             callback();
         },
@@ -243,7 +229,7 @@ function customAlert(page,callback) {
             $j('#progressbar').progressbar({
                 value: bar
             });
-            
+
             //$j('#sync-msg').append('<br>'+d.updated+' units updated.');
             callback();
         }
@@ -263,7 +249,7 @@ function finalizeSync() {
         error: function (d) {
              $j('#sync-msg').append('<br><br><b>All units and locations have been synced. You can now close this window. </b>');
         },
-    });  
+    });
 }
 
 $j(function() {
@@ -283,8 +269,8 @@ $j('#complex-btn').click(function () {
         success: function (d) {
             //$j('#complex-msg').append('Units created: ' +d.created + '. Units updated: ' + d.updated);
             $j('#complex-msg').append("Sync complete, you can now close this window.");
-             
+
         }
-    });  
+    });
 });
 </script>
