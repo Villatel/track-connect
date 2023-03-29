@@ -128,10 +128,11 @@ class pluginApi{
             $count = 0;
 
             foreach ($units->_embedded->units as $unit) {
+                //check unit status
                 $isDraft = true;
 
-                if (isset($unit->isActive)){
-                    if ($unit->isActive) {
+                if (isset($unit->custom->pms_units_is_website)){
+                    if ($unit->custom->pms_units_is_website) {
                         $isDraft = false;
                         if (!$unit->_embedded->node->custom->pms_nodes_website_activate) {
                             $isDraft = true;
