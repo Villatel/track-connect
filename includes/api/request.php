@@ -672,16 +672,18 @@ class pluginApi{
 
         if (!isset($nodes->errors) && isset($nodes->_embedded->nodes)) {
             foreach ($nodes->_embedded->nodes as $node) {
+                $nodeTypeId = $node->type->id;
+                $nodeTypeName = $node->type->name;
                 $nodeType = $wpdb->get_row(
-                    "SELECT id FROM ".$wpdb->prefix."track_node_types WHERE type_id = '".$node->_embedded->type->id."';"
+                    "SELECT id FROM ".$wpdb->prefix."track_node_types WHERE type_id = '".$nodeTypeId."';"
                 );
 
                 if (!$nodeType) {
                     $wpdb->insert(
                         $wpdb->prefix.'track_node_types',
                         [
-                            'name' => $node->_embedded->type->name,
-                            'type_id' => $node->_embedded->type->id,
+                            'name' => $nodeTypeName,
+                            'type_id' => $nodeTypeId,
                             'active' => 1
                         ],
                         ['%s', '%d', '%d']
@@ -689,8 +691,8 @@ class pluginApi{
                 } else {
                     $wpdb->update(
                         $wpdb->prefix.'track_node_types',
-                        ['name' => $node->_embedded->type->name, 'active' => 1],
-                        ['type_id' => $node->_embedded->type->id],
+                        ['name' => $nodeTypeName, 'active' => 1],
+                        ['type_id' => $nodeTypeId],
                         ['%s', '%d'], ['%d']
                     );
                 }
@@ -702,8 +704,8 @@ class pluginApi{
                         [
                             'name' => $node->name,
                             'node_id' => $node->id,
-                            'node_type_id' => $node->_embedded->type->id,
-                            'slug' => $this->slugify($node->name)
+                            'node_type_id' => $nodeTypeId,
+                            'slug' => self::slugify($node->name)
                         ],
                         ['%s', '%d', '%d', '%s']
                     );
@@ -739,8 +741,8 @@ class pluginApi{
                         $wpdb->prefix.'terms',
                         [
                             'name' => $node->name,
-                            'node_type_id' => $node->_embedded->type->id,
-                            'slug' => $this->slugify($node->name)
+                            'node_type_id' => $nodeTypeId,
+                            'slug' => self::slugify($node->name)
                         ],
                         ['node_id' => $node->id],
                         ['%s', '%d', '%s'], ['%d']
@@ -755,7 +757,10 @@ class pluginApi{
 
                     if ($term) {
                         $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
-                        if (isset($nodeUnits) && $nodeUnits->status !== 404) {
+                        if (isset($nodeUnits)) {
+                            if (isset($nodeUnits->status) && $nodeUnits->status !== 404) {
+                                return;
+                            }
                             foreach ($nodeUnits->_embedded->units as $unit) {
                                 $post = $wpdb->get_row(
                                     "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."';"
