@@ -1029,6 +1029,10 @@ class pluginApi{
         // Check image file type
         $wp_filetype = wp_check_filetype( $filename, null );
 
+        if (!$wp_filetype['type']) {
+            $wp_filetype['type'] = 'image/jpeg';
+        }
+
         // Set attachment data
         $attachment = array(
             'post_mime_type' => $wp_filetype['type'],
