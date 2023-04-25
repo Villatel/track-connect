@@ -7,17 +7,17 @@ class pluginApi{
 	protected $url;
 
 	public function __construct($domain,$token, $secret, $debug = 0){
-        $this->domain = $domain;	
+        $this->domain = $domain;
         $this->token = $token;
         $this->secret = $secret;
         $this->debug = 	$debug;
         $this->endpoint = 'https://'.strtolower($domain).'.trackhs.com';
 	}
-    
+
     public function getEndPoint(){
         return $this->endpoint;
     }
-    
+
     public function getUnitCount(){
         global $wpdb;
         $units = wp_remote_post($this->endpoint.'/api/wordpress/unit-count/',
@@ -29,36 +29,36 @@ class pluginApi{
 			    )
 			)
         );
-           
-        // Disable inactive units      
+
+        // Disable inactive units
         $ids = json_decode($units['body'])->units;
-        
+
         $posts = $wpdb->get_results("SELECT posts.ID AS id FROM `".$wpdb->prefix."posts` AS posts
             WHERE post_type='listing' AND post_status ='publish'
             AND ID IN(SELECT post_id FROM `".$wpdb->prefix."postmeta` WHERE meta_key='_listing_unit_id' AND meta_value NOT IN (".implode(',',$ids).") ) ");
-        
+
 		if(!empty($posts)){
     		foreach($posts as $post){
-    			$wpdb->update( $wpdb->posts, 
-                    array( 'post_status' => 'draft' ), 
-                    array( 'ID' => $post->id ), 
+    			$wpdb->update( $wpdb->posts,
+                    array( 'post_status' => 'draft' ),
+                    array( 'ID' => $post->id ),
                     array( '%s' ), array( '%d' ) );
             }
         }
-              
+
         return json_decode($units['body']);
     }
-    
+
     public function removeActive(){
         global $wpdb;
-        
+
         $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
         JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
         WHERE slug = 'active' 
         LIMIT 1;");
         $wpdb->delete( $wpdb->prefix.'term_relationships', array('term_taxonomy_id' => $term->term_taxonomy_id));
-    } 
-    
+    }
+
     public function getComplexes($nodeTypeId = null){
         global $wpdb;
         if($nodeTypeId){
@@ -72,9 +72,9 @@ class pluginApi{
     			    )
     			)
             );
-             
+
             $this->getAmenities();
-            
+
             // Check for complex id
 //            $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '".$wpdb->prefix."posts' AND column_name = 'complex_id'"  );
 //            if(empty($row)){
@@ -92,7 +92,7 @@ class pluginApi{
 //            if(empty($row)){
 //                $wpdb->query("ALTER TABLE ".$wpdb->prefix."posts ADD COLUMN parent_listing bigint(20)");
 //            }
-        
+
             $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
             JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
             WHERE slug = 'active' 
@@ -112,18 +112,18 @@ class pluginApi{
                         usort($unit->images, function($a, $b) {
                             return $a->rank - $b->rank;
                         });
-                    }                      
+                    }
                 }
                 if(!isset($unit->name)){
                     continue;
                 }
                 $today = date('Y-m-d H:i:s');
-                
-                
+
+
     			$post = $wpdb->get_row("SELECT ID as post_id FROM ".$wpdb->prefix."posts WHERE complex_id = '".$id."' LIMIT 1;");
     			if(isset($post->post_id)){
         			$post_id = $post->post_id;
-        			
+
         			//excludes
         			$youtube_id = null;
         			$youtube = $wpdb->get_row("SELECT meta_value FROM ".$wpdb->prefix."postmeta WHERE post_id = '".$post_id."' AND meta_key = '_listing_youtube_id' LIMIT 1;");
@@ -159,9 +159,9 @@ class pluginApi{
         			if($yoast){
         				$yoast_focuskw = $yoast->meta_value;
         			}
-        			
+
         			$wpdb->query("DELETE FROM ".$wpdb->prefix."postmeta WHERE post_id = '".$post_id."' AND meta_key != '_thumbnail_id'  ;");
-        			$wpdb->query( $wpdb->prepare( 
+        			$wpdb->query( $wpdb->prepare(
                     	"
                     		INSERT INTO $wpdb->postmeta
                     		( post_id, meta_key, meta_value )
@@ -198,7 +198,7 @@ class pluginApi{
                     		( %d, %s, %s ),
                     		( %d, %s, %s ),
                     		( %d, %s, %s )
-                    	", 
+                    	",
                         array(
                             $post_id,'_listing_complex_id', $id,
                             $post_id,'_listing_complex_parent', 1,
@@ -227,7 +227,7 @@ class pluginApi{
                             $post_id,'_listing_domain', $domain,
                             $post_id,'_listing_first_image', isset($unit->images)?$unit->images[0]->url:null,
                             $post_id,'_listing_youtube_id', (!$youtube_id)?null:$youtube_id,
-                            $post_id,'_listing_disable_sync_description', (!$custom_desc)?null:$custom_desc,                        
+                            $post_id,'_listing_disable_sync_description', (!$custom_desc)?null:$custom_desc,
                             $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex)?null:$yoast_linkdex,
                             $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc)?null:$yoast_metadesc,
                             $post_id,'_yoast_wpseo_title', (!$yoast_title)?null:$yoast_title,
@@ -253,21 +253,21 @@ class pluginApi{
                           'post_name' => $this->slugify($unit->name),
                           'post_type' => 'listing',
                           'parent_listing'  => 1,
-                    );              
+                    );
                     wp_update_post( $my_post );
-                    
-                    $wpdb->update( $wpdb->posts, 
-                        array( 'group_id' => 'c-'.$id ), 
-                        array( 'ID' => $post_id ), 
+
+                    $wpdb->update( $wpdb->posts,
+                        array( 'group_id' => 'c-'.$id ),
+                        array( 'ID' => $post_id ),
                         array( '%s' ), array( '%d' ) );
-                    
-                    //Create the Status  
+
+                    //Create the Status
                     $getActive = $wpdb->get_row("SELECT * FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post_id."' AND term_taxonomy_id = ".$activeTerm);
                     if(!$getActive){
                         $wpdb->insert( $wpdb->prefix.'term_relationships',
                         array( 'object_id' => $post_id, 'term_taxonomy_id' => $activeTerm ));
                     }
-                    
+
                     // Create image
                     if(isset($unit->images)){
                         $image = $wpdb->get_row("SELECT post_id FROM ".$wpdb->prefix."postmeta WHERE post_id = '".$post_id."' AND meta_key = '_thumbnail_id' LIMIT 1;");
@@ -293,24 +293,24 @@ class pluginApi{
                         }
                     }
                     $unitsUpdated++;
-                    
+
     			}else{
-                    $unitsCreated++;                
-            
-                    $wpdb->query( $wpdb->prepare( 
+                    $unitsCreated++;
+
+                    $wpdb->query( $wpdb->prepare(
                     	"
                     		INSERT INTO $wpdb->posts
                     		( post_author, comment_status, ping_status, post_date, post_date_gmt, post_modified, post_modified_gmt, post_title, post_status, post_name, post_type, group_id, parent_listing, complex_id)
                     		VALUES 
                     		( %d, %s, %s,  %s,  %s,  %s,  %s,  %s, %s,  %s,  %s, %d, %d, %d )
-                    	", 
+                    	",
                     	array(
                             1,'closed','closed',$today,$today,$today,$today,$unit->name,'publish',$this->slugify($unit->name),'listing','c-'.$id,1,$id
                     	)
                     ));
-                    $post_id = $wpdb->insert_id;                 
-                                     
-                    $wpdb->query( $wpdb->prepare( 
+                    $post_id = $wpdb->insert_id;
+
+                    $wpdb->query( $wpdb->prepare(
                     	"
                     		INSERT INTO $wpdb->postmeta
                     		( post_id, meta_key, meta_value )
@@ -341,7 +341,7 @@ class pluginApi{
                     		( %d, %s, %s ),
                     		( %d, %s, %s ),
                     		( %d, %s, %s )
-                    	", 
+                    	",
                         array(
                             $post_id,'_listing_complex_id', $id,
                             $post_id,'_listing_complex_parent', 1,
@@ -389,11 +389,11 @@ class pluginApi{
                             }
                         }
                     }
-                    
-                    //Create the Status    
+
+                    //Create the Status
                     $wpdb->insert( $wpdb->prefix.'term_relationships',
                         array( 'object_id' => $post_id, 'term_taxonomy_id' => $activeTerm ));
-                    
+
                     // Setup amenities as features
                     if(isset($unit->amenities)){
                         foreach($unit->amenities as $amenity){
@@ -402,14 +402,14 @@ class pluginApi{
                             WHERE amenity_id = '".$amenity->id."';");
                             if($term){
                                 $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                        array( 'object_id' => $post_id, 'term_taxonomy_id' => $term->term_taxonomy_id ),  
+                                        array( 'object_id' => $post_id, 'term_taxonomy_id' => $term->term_taxonomy_id ),
                                         array( '%d', '%d' ) );
                             }
                         }
                     }
-                    
-    			}			
-    
+
+    			}
+
     		}
 
     		/**
@@ -422,19 +422,19 @@ class pluginApi{
             }
 
             $this->rebuildTaxonomies();
-    
+
             return array(
                 'updated'   => $unitsUpdated,
                 'created'   => $unitsCreated
             );
 
-        }      
-        
+        }
+
     }
-       
+
 	public function getUnits($page = 1, $size = 25, $nodeTypeId = 0){
 		global $wpdb;
-        
+
         if(!$page){
             $page = 1;
         }
@@ -450,7 +450,7 @@ class pluginApi{
             $lodgingTypes = (array)json_decode(get_option('track_connect_lodging_types'));
         }
 
-        
+
         $this->getAmenities();
         $units = wp_remote_post($this->endpoint.'/api/wordpress/units/',
 		array(
@@ -463,7 +463,7 @@ class pluginApi{
 			    )
 			)
         );
-        
+
         $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
         JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
         WHERE slug = 'active' 
@@ -471,13 +471,13 @@ class pluginApi{
         $wpdb->delete( $wpdb->prefix.'term_relationships', array('term_taxonomy_id' => 0));
         $wpdb->delete( $wpdb->prefix.'term_relationships', array('object_id' => 0));
         $activeTerm = $term->term_taxonomy_id;
-                
+
         $unitsRemoved = 0;
 		$count = 0;
 		if($this->debug == 1){
 			print_r(json_decode($units['body']));
 		}
-		
+
 		foreach(json_decode($units['body'])->response as $id => $unit){
             $count++;
 			if (!isset($unit->occupancy) || $unit->occupancy == 0) {
@@ -485,19 +485,21 @@ class pluginApi{
 			} else {
 				$occupancy = $unit->occupancy;
 			}
-            
+
             if(count($unit->images)){
                 usort($unit->images, function($a, $b) {
                     return $a->rank - $b->rank;
                 });
-            }                      
+            }
             $today = date('Y-m-d H:i:s');
-            
-			$post = $wpdb->get_row("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_listing_unit_id' AND meta_value = '".$id."' LIMIT 1;");
-			if(isset($post->post_id)){
+
+            //todo quick fix for sync
+//			$post = $wpdb->get_row("SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_listing_unit_id' AND meta_value = '".$id."' LIMIT 1;");
+            $post = $wpdb->get_row("SELECT ID as post_id FROM $wpdb->posts WHERE unit_id = '".$id."' LIMIT 1;");
+            if(isset($post->post_id)){
     			$unitsUpdated++;
     			$post_id = $post->post_id;
-    			
+
     			//excludes
     			$youtube_id = null;
     			$youtube_id = null;
@@ -535,11 +537,11 @@ class pluginApi{
     			if($yoast){
     				$yoast_focuskw = $yoast->meta_value;
     			}
-    			
+
     			$parent = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId)?0:1;
-    			
+
     			$wpdb->query("DELETE FROM $wpdb->postmeta WHERE post_id = '".$post_id."' AND meta_key != '_thumbnail_id'  ;");
-    			$wpdb->query( $wpdb->prepare( 
+    			$wpdb->query( $wpdb->prepare(
                 	"
                 		INSERT INTO $wpdb->postmeta
                 		( post_id, meta_key, meta_value )
@@ -580,24 +582,24 @@ class pluginApi{
                 		( %d, %s, %s ),
                 		( %d, %s, %s ),
                 		( %d, %s, %s )
-                	", 
+                	",
                     array(
                         $post_id,'_listing_unit_id', $id,
                         $post_id,'_listing_complex_id', $unit->node,
                         $post_id,'_listing_complex_parent', $parent,
-                        
+
                         $post_id,'_listing_lodging_type', isset($unit->lodgingtype)?$unit->lodgingtype:null,
                         $post_id,'_listing_lodging_type_name', isset($unit->lodgingtypename)?$unit->lodgingtypename:null,
                         $post_id,'_listing_overview', isset($unit->overview)?$unit->overview:null,
                         $post_id,'_listing_bed_types', json_encode($unit->bedtypes),
-                        
+
                         $post_id,'_listing_bedrooms', $unit->rooms,
                         $post_id,'_listing_min_bedrooms', isset($unit->rooms)?$unit->rooms:0,
                         $post_id,'_listing_max_bedrooms', isset($unit->rooms)?$unit->rooms:0,
-                        
+
                         $post_id,'_listing_latitude', isset($unit->latitude)?$unit->latitude:0,
                         $post_id,'_listing_longitude', isset($unit->longitude)?$unit->longitude:0,
-                        
+
                         $post_id,'_listing_area', isset($unit->area)?$unit->area:0,
 
                         $post_id,'_listing_bathrooms', $unit->bath,
@@ -619,7 +621,7 @@ class pluginApi{
                         $post_id,'_listing_domain', $domain,
                         $post_id,'_listing_first_image', ($unit->images)?$unit->images[0]->url:null,
                         $post_id,'_listing_youtube_id', (!$youtube_id)?null:$youtube_id,
-                        $post_id,'_listing_disable_sync_description', (!$custom_desc)?null:$custom_desc,                        
+                        $post_id,'_listing_disable_sync_description', (!$custom_desc)?null:$custom_desc,
                         $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex)?null:$yoast_linkdex,
                         $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc)?null:$yoast_metadesc,
                         $post_id,'_yoast_wpseo_title', (!$yoast_title)?null:$yoast_title,
@@ -643,23 +645,23 @@ class pluginApi{
                       'post_name' => $this->slugify($unit->name),
                       'post_type' => 'listing',
                       'post_status' => 'publish'
-                );              
+                );
                 wp_update_post( $my_post );
-                
+
 
                 if(!$custom_desc){
-                    $wpdb->update( $wpdb->posts, 
-                        array( 'post_content' => $unit->description ), 
-                        array( 'ID' => $post_id ), 
+                    $wpdb->update( $wpdb->posts,
+                        array( 'post_content' => $unit->description ),
+                        array( 'ID' => $post_id ),
                         array( '%s' ), array( '%d' ) );
                 }
-                
+
                 $group_id = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId)?'c-'.$unit->node:'u-'.$id;
-                
+
                 $wpdb->query("UPDATE ".$wpdb->prefix."posts set
                 unit_id = '".$id."', group_id = '".$group_id."', parent_listing = ".$parent."                    
                 WHERE ID = '".$post_id."' ;");
-                
+
                 // Create image
                 if(isset($unit->images)){
                     $image = $wpdb->get_row("SELECT post_id FROM $wpdb->postmeta WHERE post_id = '".$post_id."' AND meta_key = '_thumbnail_id' LIMIT 1;");
@@ -669,11 +671,11 @@ class pluginApi{
                         }
                     }
                 }
-                  
-                // Update the Status;         
+
+                // Update the Status;
                 $wpdb->insert( $wpdb->prefix.'term_relationships',
                     array( 'object_id' => $post_id, 'term_taxonomy_id' => $activeTerm ));
-                
+
                 // Update the Amenities
                 foreach($unit->amenities as $amenity){
                     $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
@@ -686,33 +688,33 @@ class pluginApi{
                             term_taxonomy_id = '".$term->term_taxonomy_id."';");
                     }
                 }
-                
+
 			}else{
-                $unitsCreated++;                
-                
+                $unitsCreated++;
+
                 $group_id = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId)?'c-'.$unit->node:'u-'.$id;
                 $parent = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId)?0:1;
-                
-                $wpdb->query( $wpdb->prepare( 
+
+                $wpdb->query( $wpdb->prepare(
                 	"
                 		INSERT INTO $wpdb->posts
                 		( unit_id, post_author, comment_status, ping_status, post_date, post_date_gmt, post_modified, post_modified_gmt, post_title, post_status, post_name, post_type,group_id,parent_listing)
                 		VALUES 
                 		( %d, %d, %s, %s,  %s,  %s,  %s,  %s,  %s, %s,  %s,  %s, %s, %d )
-                	", 
+                	",
                 	array(
                         $id,1,'closed','closed',$today,$today,$today,$today,$unit->name,'publish',$this->slugify($unit->name),'listing',$group_id,$parent
                 	)
                 ));
                 $post_id = $wpdb->insert_id;
-                
-                $wpdb->update( $wpdb->posts, 
-                    array( 'post_content' => $unit->description ), 
-                    array( 'ID' => $post_id ), 
+
+                $wpdb->update( $wpdb->posts,
+                    array( 'post_content' => $unit->description ),
+                    array( 'ID' => $post_id ),
                     array( '%s' ), array( '%d' ) );
-                
-                                 
-                $wpdb->query( $wpdb->prepare( 
+
+
+                $wpdb->query( $wpdb->prepare(
                 	"
                 		INSERT INTO $wpdb->postmeta
                 		( post_id, meta_key, meta_value )
@@ -748,7 +750,7 @@ class pluginApi{
                 		( %d, %s, %s ),
                 		( %d, %s, %s ),
                 		( %d, %s, %s )
-                	", 
+                	",
                     array(
                         $post_id,'_listing_unit_id', $id,
                         $post_id,'_listing_complex_id', $unit->node,
@@ -757,14 +759,14 @@ class pluginApi{
                         $post_id,'_listing_lodging_type_name', isset($unit->lodgingtypename)?$unit->lodgingtypename:null,
                         $post_id,'_listing_overview', isset($unit->overview)?$unit->overview:null,
                         $post_id,'_listing_bed_types', json_encode($unit->bedtypes),
-                        
+
                         $post_id,'_listing_bedrooms', $unit->rooms,
                         $post_id,'_listing_min_bedrooms', isset($unit->rooms)?$unit->rooms:0,
                         $post_id,'_listing_max_bedrooms', isset($unit->rooms)?$unit->rooms:0,
-                        
+
                         $post_id,'_listing_latitude', isset($unit->latitude)?$unit->latitude:0,
                         $post_id,'_listing_longitude', isset($unit->longitude)?$unit->longitude:0,
-                        
+
                         $post_id,'_listing_area', isset($unit->area)?$unit->area:0,
 
                         $post_id,'_listing_bathrooms', $unit->bath,
@@ -803,11 +805,11 @@ class pluginApi{
                         }
                     }
                 }
-                
-                //Create the Status    
+
+                //Create the Status
                 $wpdb->insert( $wpdb->prefix.'term_relationships',
                     array( 'object_id' => $post_id, 'term_taxonomy_id' => $activeTerm ));
-                    
+
                 // Setup amenities as features
                 if(isset($unit->amenities)){
                     foreach($unit->amenities as $amenity){
@@ -816,27 +818,27 @@ class pluginApi{
                         WHERE amenity_id = '".$amenity->id."';");
                         if($term){
                             $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                    array( 'object_id' => $post_id, 'term_taxonomy_id' => $term->term_taxonomy_id ),  
+                                    array( 'object_id' => $post_id, 'term_taxonomy_id' => $term->term_taxonomy_id ),
                                     array( '%d', '%d' ) );
                         }
                     }
                 }
-                
-			}			
+
+			}
 
 		}
 
 		update_option('track_connect_lodging_types', json_encode($lodgingTypes));
-        
+
         return array(
             'updated'   => $unitsUpdated + $unitsCreated
         );
-		
+
 	}
-	
+
 	public function rebuildTaxonomies(){
     	global $wpdb;
-    	
+
     	$wpdb->query("UPDATE ".$wpdb->prefix."term_taxonomy SET count = (
             SELECT COUNT(*) FROM ".$wpdb->prefix."term_relationships rel
                 LEFT JOIN ".$wpdb->prefix."posts po ON (po.ID = rel.object_id)
@@ -848,10 +850,10 @@ class pluginApi{
                     po.post_status IN ('publish', 'future')
             )"  );
 	}
-    
+
     public function getUnitNodes(){
         global $wpdb;
-        
+
         $nodes = wp_remote_post($this->endpoint.'/api/wordpress/unit-nodes/',
 		array(
 			'timeout'     => 500,
@@ -861,82 +863,82 @@ class pluginApi{
 			    )
 			)
         );
-        
+
         $wpdb->query("UPDATE ".$wpdb->prefix."track_node_types set active = 0");
-        
+
         if(isset(json_decode($nodes['body'])->response)){
         foreach(json_decode($nodes['body'])->response as $nodeId => $node){
             $nodeType = $wpdb->get_row("SELECT id FROM ".$wpdb->prefix."track_node_types WHERE type_id = '".$node->typeid."';");
             if(!$nodeType){
                 $wpdb->insert( $wpdb->prefix.'track_node_types',
-                    array( 'name' => $node->typename, 'type_id' => $node->typeid, 'active' => 1 ),  
+                    array( 'name' => $node->typename, 'type_id' => $node->typeid, 'active' => 1 ),
                     array( '%s', '%d' , '%d' ) );
 
             }else{
                 $wpdb->update( $wpdb->prefix.'track_node_types',
-                    array( 'name' => $node->typename, 'active' => 1 ), 
-                    array( 'type_id' => $node->typeid ), 
+                    array( 'name' => $node->typename, 'active' => 1 ),
+                    array( 'type_id' => $node->typeid ),
                     array( '%s', '%d' ), array( '%d' ) );
             }
-            
+
             $term = $wpdb->get_row("SELECT term_id FROM ".$wpdb->prefix."terms WHERE node_id = '".$nodeId."';");
             if(!$term){
                 $wpdb->insert( $wpdb->prefix.'terms',
-                    array( 'name' => $node->name, 'node_id' => $nodeId, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ),  
+                    array( 'name' => $node->name, 'node_id' => $nodeId, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ),
                     array( '%s', '%d' , '%d', '%s' ) );
                 $termId = $wpdb->insert_id;
-                
+
                 $wpdb->insert( $wpdb->prefix.'term_taxonomy',
-                    array( 'term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0 ),  
+                    array( 'term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0 ),
                     array( '%d', '%s', '%d' ) );
                 $term_taxonomy_id = $wpdb->insert_id;
-                    
-                if(isset($node->units)){ 
+
+                if(isset($node->units)){
                     foreach($node->units as $unitId){
                         $post = $wpdb->get_row("SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unitId."';");
                         if($post){
                             $wpdb->query("DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term_taxonomy_id."';");
                             $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term_taxonomy_id ),  
+                                array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term_taxonomy_id ),
                                 array( '%d', '%d' ) );
                         }
                     }
                 }
-                      
+
             }else{
                 $wpdb->update( $wpdb->prefix.'terms',
-                    array( 'name' => $node->name, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ), 
-                    array( 'node_id' => $nodeId ), 
+                    array( 'name' => $node->name, 'node_type_id' => $node->typeid, 'slug' => $this->slugify($node->name) ),
+                    array( 'node_id' => $nodeId ),
                     array( '%s', '%d', '%s' ), array( '%d' ) );
-                
+
                 $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
                 JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
                 WHERE node_id = '".$nodeId."'  
-                LIMIT 1;");             
-                
-                if($term){   
-                    if(isset($node->units)){      
+                LIMIT 1;");
+
+                if($term){
+                    if(isset($node->units)){
                         foreach($node->units as $unitId){
                             $post = $wpdb->get_row("SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unitId."';");
                             if($post){
                                 $wpdb->query("DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term->term_taxonomy_id."';");
                                 $wpdb->insert( $wpdb->prefix.'term_relationships',
-                                    array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id ),  
+                                    array( 'object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id ),
                                     array( '%d', '%d' ) );
                             }
                         }
                     }
                 }
             }
-            
-                    
-        } 
-        }  
+
+
+        }
+        }
     }
-    
+
     public function getAmenities(){
         global $wpdb;
-        
+
         $amenityArray = wp_remote_post($this->endpoint.'/api/wordpress/amenities/',
 		array(
 			'timeout'     => 500,
@@ -946,69 +948,69 @@ class pluginApi{
 			    )
 			)
         );
-        
+
         $wpdb->query("UPDATE ".$wpdb->prefix."track_amenities set active = 0");
-          
+
         foreach(json_decode($amenityArray['body'])->response as $amenity){
-            
+
             $amenityId = $wpdb->get_row("SELECT id FROM ".$wpdb->prefix."track_amenities WHERE amenity_id = '".$amenity->id."';");
             if(!$amenityId){
                 $wpdb->insert( $wpdb->prefix.'track_amenities',
-                    array( 'active' => 1, 'name' => $amenity->name, 'amenity_id' => $amenity->id, 'group_name' => $amenity->groupname, 'group_id' => $amenity->groupid ),  
+                    array( 'active' => 1, 'name' => $amenity->name, 'amenity_id' => $amenity->id, 'group_name' => $amenity->groupname, 'group_id' => $amenity->groupid ),
                     array( '%d', '%s', '%d', '%s', '%d' ) );
 
             }else{
                 $wpdb->update( $wpdb->prefix.'track_amenities',
-                    array( 'active' => 1, 'name' => $amenity->name, 'group_id' => $amenity->groupid, 'group_name' => $amenity->groupname), 
-                    array( 'amenity_id' => $amenity->id ), 
+                    array( 'active' => 1, 'name' => $amenity->name, 'group_id' => $amenity->groupid, 'group_name' => $amenity->groupname),
+                    array( 'amenity_id' => $amenity->id ),
                     array( '%d','%s','%d','%s' ), array( '%d' ) );
             }
-            
+
             $term = $wpdb->get_row("SELECT term_id FROM ".$wpdb->prefix."terms WHERE amenity_id = '".$amenity->id."';");
             if(!$term){
                  $wpdb->insert( $wpdb->prefix.'terms',
-                    array( 'name' => $amenity->name, 'amenity_id' => $amenity->id, 'slug' => $this->slugify($amenity->name) ),  
+                    array( 'name' => $amenity->name, 'amenity_id' => $amenity->id, 'slug' => $this->slugify($amenity->name) ),
                     array( '%d', '%d', '%s' ) );
-                
+
                  $wpdb->insert( $wpdb->prefix.'term_taxonomy',
-                    array( 'term_id' => $term->term_id, 'taxonomy' => 'features', 'description' => $amenity->groupname, 'parent' => 0 ),  
+                    array( 'term_id' => $term->term_id, 'taxonomy' => 'features', 'description' => $amenity->groupname, 'parent' => 0 ),
                     array( '%d', '%s', '%s', '%d' ) );
-                
-                    
+
+
             }else{
                 $wpdb->update( $wpdb->prefix.'terms',
-                    array( 'name' => $amenity->name, 'slug' => $this->slugify($amenity->name) ), 
-                    array( 'amenity_id' => $amenity->id ), 
+                    array( 'name' => $amenity->name, 'slug' => $this->slugify($amenity->name) ),
+                    array( 'amenity_id' => $amenity->id ),
                     array( '%s', '%s', ), array( '%d' ) );
-                
+
                 $amenityTax = $wpdb->get_row("SELECT term_id FROM ".$wpdb->prefix."term_taxonomy WHERE term_id = '".$term->term_id."';");
                 if($amenityTax){
                 $wpdb->update( $wpdb->prefix.'term_taxonomy',
-                    array( 'description' => $amenity->groupname ), 
-                    array( 'term_id' => $term->term_id ), 
-                    array( '%s' ), array( '%d' ) ); 
+                    array( 'description' => $amenity->groupname ),
+                    array( 'term_id' => $term->term_id ),
+                    array( '%s' ), array( '%d' ) );
                 }else{
                     $wpdb->insert( $wpdb->prefix.'term_taxonomy',
-                    array( 'term_id' => $term->term_id, 'taxonomy' => 'features', 'description' => $amenity->groupname, 'parent' => 0 ),  
+                    array( 'term_id' => $term->term_id, 'taxonomy' => 'features', 'description' => $amenity->groupname, 'parent' => 0 ),
                     array( '%d', '%s', '%s', '%d' ) );
-                }                 
-            }            
-        }   
+                }
+            }
+        }
     }
-    
+
     public function getAvailableUnits($checkin,$checkout,$bedrooms = false,$nodeTypeId = false,$rateType = 1){
 		global $wpdb;
-		
+
 		$checkin = date('Y-m-d', strtotime($checkin));
 		$checkout = date('Y-m-d', strtotime($checkout));
-		
+
 		$units = wp_remote_post($this->endpoint.'/api/wordpress/available-units/',
 		array(
 			'timeout'     => 500,
             'user-agent' => apply_filters( 'http_headers_useragent', 'WordPress/' . get_bloginfo( 'version' ) . '; TrackConnect/'. WP_LISTINGS_VERSION .'; ' . get_bloginfo( 'url' ) ),
 			'body' => array(
     			'token'     => $this->token,
-			    'checkin'   => $checkin, 
+			    'checkin'   => $checkin,
 			    'checkout'  => $checkout,
 			    'bedrooms'  => false,
 			    'ratetype'  => $rateType
@@ -1018,18 +1020,18 @@ class pluginApi{
 
 		$unitArray = [];
 		$rateArray = [];
-		
+
 		if($this->debug == 1){
 			print_r(json_decode($units['body']));
 		}
-		
+
 		if(json_decode($units['body'])->success == false){
 			return [
 				'success' => false,
 				'message' => json_decode($units['body'])->message
 			];
 		}
-		
+
 		foreach(json_decode($units['body'])->response->available_nodes as $avail){
 
     		if(isset($avail->unit)){
@@ -1039,18 +1041,18 @@ class pluginApi{
                     $rateArray[$avail->unit] = $avail->rate;
                 }
             }
-        }		
-		
+        }
+
         return [
         	'success' => true,
         	'units'   => $unitArray,
         	'rates'	  => $rateArray
         ];
     }
-    
+
     public function getReservedDates($unitId){
 		global $wpdb;
-		
+
 		$units = wp_remote_get($this->endpoint.'/api/pms/units/'.$unitId.'/availability/', [
 			'timeout'     => 500,
             'user-agent' => apply_filters( 'http_headers_useragent', 'WordPress/' . get_bloginfo( 'version' ) . '; TrackConnect/'. WP_LISTINGS_VERSION .'; ' . get_bloginfo( 'url' ) ),
@@ -1074,9 +1076,9 @@ class pluginApi{
         }
         return $result;
     }
-    
+
     public function getQuote($unitId,$checkin,$checkout,$persons){
-		
+
 		$quote = wp_remote_post($this->endpoint.'/api/wordpress/quote/',
 		array(
 			'timeout'     => 500,
@@ -1093,7 +1095,7 @@ class pluginApi{
 
         return json_decode($quote['body']);
     }
-    
+
 	static public function slugify($text){
 		// replace non letter or digits by -
 		$text = preg_replace('~[^\\pL\d]+~u', '-', $text);
@@ -1116,27 +1118,27 @@ class pluginApi{
 
 		return $text;
 	}
-	
+
 	public function createImage($post_id,$url){
     	// Add Featured Image to Post
         $image_url  = $url; // Define the image URL here
         $upload_dir = wp_upload_dir(); // Set upload folder
         $image_data = file_get_contents($image_url); // Get image data
         $filename   = basename($image_url); // Create image file name
-        
+
         // Check folder permission and define file location
         if( wp_mkdir_p( $upload_dir['path'] ) ) {
             $file = $upload_dir['path'] . '/' . $filename;
         } else {
             $file = $upload_dir['basedir'] . '/' . $filename;
         }
-        
+
         // Create the image  file on the server
         file_put_contents( $file, $image_data );
-        
+
         // Check image file type
         $wp_filetype = wp_check_filetype( $filename, null );
-        
+
         // Set attachment data
         $attachment = array(
             'post_mime_type' => $wp_filetype['type'],
@@ -1144,19 +1146,19 @@ class pluginApi{
             'post_content'   => '',
             'post_status'    => 'inherit'
         );
-        
+
         // Create the attachment
         $attach_id = wp_insert_attachment( $attachment, $file, $post_id );
-        
+
         // Include image.php
         require_once(ABSPATH . 'wp-admin/includes/image.php');
-        
+
         // Define attachment metadata
         $attach_data = wp_generate_attachment_metadata( $attach_id, $file );
-        
+
         // Assign metadata to attachment
         wp_update_attachment_metadata( $attach_id, $attach_data );
-        
+
         // And finally assign featured image to post
         set_post_thumbnail( $post_id, $attach_id );
 	}
