@@ -143,10 +143,10 @@ class pluginApi{
                 }
 
                 $count++;
-                if (!isset($unit->occupancy) || $unit->occupancy == 0) {
+                if (!isset($unit->maxOccupancy) || $unit->maxOccupancy == 0) {
                     $occupancy =  isset($unit->rooms) && $unit->rooms >= 1 ? count($unit->rooms) : 2;
                 } else {
-                    $occupancy = $unit->occupancy;
+                    $occupancy = $unit->maxOccupancy;
                 }
 
                 //set unit prices
