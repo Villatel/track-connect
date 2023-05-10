@@ -359,7 +359,7 @@ class pluginApi{
                         'post_modified_gmt' => $today,
                         'post_name' => $this->slugify($unit->name),
                         'post_type' => 'listing',
-//                        'post_status' => $isDraft ? 'draft' : 'publish'
+                        'post_status' => 'publish'
                     ];
                     wp_update_post($my_post);
 
