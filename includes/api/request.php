@@ -359,9 +359,17 @@ class pluginApi{
                         'post_modified_gmt' => $today,
                         'post_name' => $this->slugify($unit->name),
                         'post_type' => 'listing',
-                        'post_status' => $isDraft ? 'draft' : 'publish'
+//                        'post_status' => $isDraft ? 'draft' : 'publish'
                     ];
                     wp_update_post($my_post);
+
+                    if ($isDraft) {
+                        $my_post_status = [
+                            'ID'           => $post_id,
+                            'post_status' => 'draft'
+                        ];
+                        wp_update_post( $my_post_status );
+                    }
 
                     if (!$custom_desc) {
                         $wpdb->update(
