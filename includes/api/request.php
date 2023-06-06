@@ -764,6 +764,16 @@ class pluginApi{
                     );
 
                     if ($term) {
+                        update_term_meta(
+                            $term->term_taxonomy_id,
+                            'resort_metadata_website_description',
+                            $node->custom->pms_nodes_resort_metadata_website_description
+                        );
+                        update_term_meta(
+                            $term->term_taxonomy_id,
+                            'resort_google_map_url',
+                            $node->custom->pms_nodes_resort_google_map_url
+                        );
                         $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
                         if (isset($nodeUnits)) {
                             if (isset($nodeUnits->status) && $nodeUnits->status !== 404) {
