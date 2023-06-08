@@ -764,16 +764,23 @@ class pluginApi{
                     );
 
                     if ($term) {
-                        update_term_meta(
-                            $term->term_taxonomy_id,
-                            'resort_metadata_website_description',
-                            $node->custom->pms_nodes_resort_metadata_website_description
-                        );
-                        update_term_meta(
-                            $term->term_taxonomy_id,
-                            'resort_google_map_url',
-                            $node->custom->pms_nodes_resort_google_map_url
-                        );
+                        $nodeTrackData = [
+                            'resort_metadata_website_description' => $node->custom->pms_nodes_resort_metadata_website_description,
+                            'resort_google_map_url' => $node->custom->pms_nodes_resort_google_map_url,
+                            'resort_locality' => $node->locality,
+                            'resort_street_address' => $node->streetAddress,
+                            'resort_postal' => $node->postal,
+                            'resort_country' => $node->country,
+                        ];
+
+                        foreach ($nodeTrackData as $meta_key => $nodeTrackDataValue) {
+                            update_term_meta(
+                                $term->term_taxonomy_id,
+                                $meta_key,
+                                $nodeTrackDataValue
+                            );
+                        }
+
                         $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
                         if (isset($nodeUnits)) {
                             if (isset($nodeUnits->status) && $nodeUnits->status !== 404) {
