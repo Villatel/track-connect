@@ -773,6 +773,16 @@ class pluginApi{
                             'resort_country' => $node->country,
                         ];
 
+                        if ($node->amenities) {
+                            $nodeAmenities = [];
+                            foreach ($node->amenities as $nodeAmenity) {
+                                if ($nodeAmenity->group->name == 'Villatel (Resort Amenities - website only - SEO Schema)') {
+                                    $nodeAmenities [] = $nodeAmenity->name;
+                                }
+                            }
+                            $nodeTrackData['resort_amenities'] = $nodeAmenities;
+                        }
+
                         foreach ($nodeTrackData as $meta_key => $nodeTrackDataValue) {
                             update_term_meta(
                                 $term->term_taxonomy_id,
