@@ -771,6 +771,8 @@ class pluginApi{
                             'resort_street_address' => $node->streetAddress,
                             'resort_postal' => $node->postal,
                             'resort_country' => $node->country,
+                            'resort_latitude' => $node->latitude,
+                            'resort_longitude' => $node->longitude,
                         ];
 
                         if ($node->amenities) {
