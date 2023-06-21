@@ -771,7 +771,19 @@ class pluginApi{
                             'resort_street_address' => $node->streetAddress,
                             'resort_postal' => $node->postal,
                             'resort_country' => $node->country,
+                            'resort_latitude' => $node->latitude,
+                            'resort_longitude' => $node->longitude,
                         ];
+
+                        if ($node->amenities) {
+                            $nodeAmenities = [];
+                            foreach ($node->amenities as $nodeAmenity) {
+                                if ($nodeAmenity->group->name == 'Villatel (Resort Amenities - website only - SEO Schema)') {
+                                    $nodeAmenities [] = $nodeAmenity->name;
+                                }
+                            }
+                            $nodeTrackData['resort_amenities'] = $nodeAmenities;
+                        }
 
                         foreach ($nodeTrackData as $meta_key => $nodeTrackDataValue) {
                             update_term_meta(
