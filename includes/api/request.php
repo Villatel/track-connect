@@ -673,7 +673,7 @@ class pluginApi{
         global $wpdb;
 
         $nodes = $this->request([
-            'endpoint' => "/api/pms/nodes"
+            'endpoint' => "/api/pms/nodes?size=-1"
         ]);
 
         $wpdb->query("UPDATE ".$wpdb->prefix."track_node_types set active = 0");
