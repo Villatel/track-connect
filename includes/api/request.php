@@ -673,7 +673,7 @@ class pluginApi{
         global $wpdb;
 
         $nodes = $this->request([
-            'endpoint' => "/api/pms/nodes"
+            'endpoint' => "/api/pms/nodes?size=-1"
         ]);
 
         $wpdb->query("UPDATE ".$wpdb->prefix."track_node_types set active = 0");
@@ -719,11 +719,14 @@ class pluginApi{
                     );
                     $termId = $wpdb->insert_id;
 
+                    $parentNodeTermId = $this->getParentNodeTermId($node, $nodes->_embedded->nodes, $nodeTypeId);
                     $wpdb->insert(
                         $wpdb->prefix.'term_taxonomy',
-                        ['term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0],
+                        ['term_id' => $termId, 'taxonomy' => 'locations', 'parent' => $parentNodeTermId],
                         ['%d', '%s', '%d']
                     );
+                    wp_update_term($termId, 'locations', ['parent' => $parentNodeTermId]);
+
                     $term_taxonomy_id = $wpdb->insert_id;
 
                     $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
@@ -756,26 +759,55 @@ class pluginApi{
                         ['%s', '%d', '%s'], ['%d']
                     );
 
-                    $term = $wpdb->get_row(
+                    $termTaxanomy = $wpdb->get_row(
                         "SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
                 JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
                 WHERE node_id = '".$node->id."'  
                 LIMIT 1;"
                     );
 
-                    if ($term) {
+                    $parentNodeTermId = $this->getParentNodeTermId($node, $nodes->_embedded->nodes, $nodeTypeId);
+                    if (!$termTaxanomy) {
+                        $wpdb->insert(
+                            $wpdb->prefix.'term_taxonomy',
+                            ['term_id' => $term->term_id, 'taxonomy' => 'locations', 'parent' => $parentNodeTermId],
+                            ['%d', '%s', '%d']
+                        );
+                    } else {
+                        $wpdb->update(
+                            $wpdb->prefix.'term_taxonomy',
+                            ['parent' => $parentNodeTermId],
+                            ['term_id' => $term->term_id, 'taxonomy' => 'locations'],
+                            ['%d'], ['%d', '%s']
+                        );
+                    }
+                    wp_update_term($term->term_id, 'locations', ['parent' => $parentNodeTermId]);
+
+                    if ($termTaxanomy) {
                         $nodeTrackData = [
-                            'resort_metadata_website_description' => $node->custom->pms_nodes_resort_metadata_website_description,
-                            'resort_google_map_url' => $node->custom->pms_nodes_resort_google_map_url,
-                            'resort_locality' => $node->locality,
-                            'resort_street_address' => $node->streetAddress,
-                            'resort_postal' => $node->postal,
-                            'resort_country' => $node->country,
+                            'resort_metadata_website_description' => !isset($node->custom->pms_nodes_resort_metadata_website_description) ? '' : $node->custom->pms_nodes_resort_metadata_website_description,
+                            'resort_google_map_url' => !isset($node->custom->pms_nodes_resort_google_map_url) ? '' : $node->custom->pms_nodes_resort_google_map_url ?? '',
+                            'resort_locality' => !isset($node->locality) ? '' : $node->locality,
+                            'resort_street_address' => !isset($node->streetAddress) ? '' : $node->streetAddress,
+                            'resort_postal' => !isset($node->postal) ? '' : $node->postal,
+                            'resort_country' => !isset($node->country) ? '' : $node->country,
+                            'resort_latitude' => !isset($node->latitude) ? '' : $node->latitude,
+                            'resort_longitude' => !isset($node->longitude) ? '' : $node->longitude,
                         ];
+
+                        if ($node->amenities) {
+                            $nodeAmenities = [];
+                            foreach ($node->amenities as $nodeAmenity) {
+                                if ($nodeAmenity->group->name == 'Villatel (Resort Amenities - website only - SEO Schema)') {
+                                    $nodeAmenities [] = $nodeAmenity->name;
+                                }
+                            }
+                            $nodeTrackData['resort_amenities'] = $nodeAmenities;
+                        }
 
                         foreach ($nodeTrackData as $meta_key => $nodeTrackDataValue) {
                             update_term_meta(
-                                $term->term_taxonomy_id,
+                                $termTaxanomy->term_taxonomy_id,
                                 $meta_key,
                                 $nodeTrackDataValue
                             );
@@ -792,11 +824,11 @@ class pluginApi{
                                 );
                                 if ($post) {
                                     $wpdb->query(
-                                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term->term_taxonomy_id."';"
+                                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$termTaxanomy->term_taxonomy_id."';"
                                     );
                                     $wpdb->insert(
                                         $wpdb->prefix.'term_relationships',
-                                        ['object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id],
+                                        ['object_id' => $post->ID, 'term_taxonomy_id' => $termTaxanomy->term_taxonomy_id],
                                         ['%d', '%d']
                                     );
                                 }
@@ -807,6 +839,48 @@ class pluginApi{
             }
         }
     }
+
+
+    /**
+     * Get or create parent node term_id
+     *
+     * @param $currentNode
+     * @param $nodesList
+     * @param $nodeTypeId
+     *
+     * @return int|string
+     */
+    public function getParentNodeTermId($currentNode, $nodesList, $nodeTypeId): int
+    {
+        global $wpdb;
+
+        $parentNodeTermId = 0;
+
+        if ($currentNode->parentId) {
+            $termIdParentNode = $wpdb->get_row(
+                "SELECT term_id FROM ".$wpdb->prefix."terms WHERE node_id = '".$currentNode->parentId."';"
+            );
+            if ($termIdParentNode) {
+                $parentNodeTermId = $termIdParentNode->term_id;
+            } else {
+                $parentNode = $nodesList[array_search($currentNode->parentId, array_column($nodesList, 'id'))];
+                $wpdb->insert(
+                    $wpdb->prefix.'terms',
+                    [
+                        'name' => $parentNode->name,
+                        'node_id' => $parentNode->id,
+                        'node_type_id' => $nodeTypeId,
+                        'slug' => self::slugify($parentNode->name)
+                    ],
+                    ['%s', '%d', '%d', '%s']
+                );
+                $parentNodeTermId = $wpdb->insert_id;
+            }
+        }
+
+        return $parentNodeTermId;
+    }
+
 
     public function getAmenities()
     {
