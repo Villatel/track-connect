@@ -17,6 +17,12 @@ class pluginApi{
         $this->private_key = env('TRACK_PRIVATE_KEY');
     }
 
+    public function set_keys($public_key, $private_key)
+    {
+        $this->public_key = $public_key;
+        $this->private_key = $private_key;
+    }
+
     public function request($params = [])
     {
         $curl = curl_init();
@@ -46,15 +52,18 @@ class pluginApi{
         return $this->endpoint;
     }
 
-    public function getUnitCount($endpoint = false)
+    public function getUnitCount($endpoint = false, $unitType = false)
     {
         global $wpdb;
 
         $nextEndpoint = $endpoint ? str_replace($this->base_uri, '', $endpoint) : '/api/pms/units?size=100';
+        if ($unitType) {
+            $nextEndpoint = $endpoint ? str_replace($this->base_uri, '', $endpoint) : '/api/pms/units/types?size=100';
+        }
         $unitsRequest = $this->request(['endpoint' => $nextEndpoint]);
 
         $unitIds = [];
-        $units = $unitsRequest->_embedded->units;
+        $units = $unitType ? $unitsRequest->_embedded->unitTypes : $unitsRequest->_embedded->units;
         foreach ($units as $unit) {
             $unitIds [] = $unit->id;
         }
@@ -73,9 +82,13 @@ class pluginApi{
         $resultUnitIds = array_merge($resultUnitIds, $unitIds);
 
         if (isset($unitsRequest->_links->next)) {
-            $this->getUnitCount($unitsRequest->_links->next->href);
-        }
+            if ($unitType) {
+                $this->getUnitCount($unitsRequest->_links->next->href, true);
+            } else {
+                $this->getUnitCount($unitsRequest->_links->next->href);
+            }
 
+        }
         return (object)['response' => count($resultUnitIds)];
     }
 
@@ -93,7 +106,7 @@ class pluginApi{
         $wpdb->delete($wpdb->prefix.'term_relationships', ['term_taxonomy_id' => $term->term_taxonomy_id]);
     }
 
-    public function getUnits($page = 1, $size = 25, $nodeTypeId = 0)
+    public function getUnits($page = 1, $size = 25, $nodeTypeId = 0, $unitType = false)
     {
         global $wpdb;
 
@@ -113,7 +126,11 @@ class pluginApi{
 
         $amenities = $this->getAmenities();
 
-        $units = $this->request(['endpoint' => '/api/pms/units?includeDescriptions=1&page='.$page.'&size='.$size]);
+        $endpoint = '/api/pms/units?includeDescriptions=1&page='.$page.'&size='.$size;
+        if ($unitType) {
+            $endpoint = '/api/pms/units/types?includeDescriptions=1&page='.$page.'&size='.$size;
+        }
+        $units = $this->request(['endpoint' => $endpoint]);
 
         if (isset($units) && $units->status !== 404) {
             $term = $wpdb->get_row("SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
@@ -126,13 +143,14 @@ class pluginApi{
 
             $unitsRemoved = 0;
             $count = 0;
-
-            foreach ($units->_embedded->units as $unit) {
+            $units = $unitType ? $units->_embedded->unitTypes : $units->_embedded->units;
+            foreach ($units as $unit) {
                 //check unit status
                 $isDraft = true;
 
-                if (isset($unit->custom->pms_units_is_website)){
-                    if ($unit->custom->pms_units_is_website) {
+                $isWebSite = $unitType ? $unit->custom->pms_unit_types_is_website : $unit->custom->pms_units_is_website;
+                if (isset($isWebSite)){
+                    if ($isWebSite) {
                         $isDraft = false;
                         if (!$unit->_embedded->node->custom->pms_nodes_website_activate) {
                             $isDraft = true;
@@ -142,6 +160,10 @@ class pluginApi{
                     $isDraft = false;
                 }
 
+                if (!$isWebSite && $unitType) {
+                    continue;
+                }
+
                 $count++;
                 if (!isset($unit->maxOccupancy) || $unit->maxOccupancy == 0) {
                     $occupancy =  isset($unit->rooms) && $unit->rooms >= 1 ? count($unit->rooms) : 2;
@@ -149,8 +171,12 @@ class pluginApi{
                     $occupancy = $unit->maxOccupancy;
                 }
 
+                if ($unitType) {
+                    $this->set_keys(env('TRACK_CRM_PUBLIC_KEY'), env('TRACK_CRM_PRIVATE_KEY'));
+                }
+
                 //set unit prices
-                $unitPricing = $this->get_aggregate_availability_pricing_data($unit->id);
+                $unitPricing = $this->get_aggregate_availability_pricing_data($unit->id, $unitType);
                 $unitPrices = [];
                 foreach ($unitPricing as $unitPrice) {
                     $unitPrices['min'][] = $unitPrice['rate']['min'];
@@ -166,19 +192,36 @@ class pluginApi{
 
 
                 $unit->images = [];
+                $unitImagesEndpoint = "/api/pms/units/$unit->id/images?size=-1";
+                if ($unitType) {
+                    $unitImagesEndpoint = "/api/pms/units/types/$unit->id/images?size=-1";
+                }
+
                 $unitImages = $this->request([
-                    'endpoint' => "/api/pms/units/$unit->id/images?size=-1"
+                    'endpoint' => $unitImagesEndpoint
                 ]);
 
+                $this->set_keys(env('TRACK_PUBLIC_KEY'), env('TRACK_PRIVATE_KEY'));
+
+
                 foreach ($unitImages->_embedded->images as $image) {
-                    $unit->images [] = (object)[
-                        'url' => $image->original,
-                        'text' => $image->name,
-                        'id' => $image->id,
-                        'rank' => $image->order,
-//                        'type' => stristr($image->type, '/', true)
-                        'type' => false
-                    ];
+                    if ($unitType) {
+                        $unit->images [] = (object)[
+                            'url' => $image->url,
+                            'text' => $image->caption,
+                            'id' => $image->id,
+                            'rank' => $image->order,
+                            'type' => false
+                        ];
+                    } else {
+                        $unit->images [] = (object)[
+                            'url' => $image->original,
+                            'text' => $image->name,
+                            'id' => $image->id,
+                            'rank' => $image->order,
+                            'type' => false
+                        ];
+                    }
                 }
 
                 if (count($unit->images)) {
@@ -193,8 +236,9 @@ class pluginApi{
 //                    $unit->amenities [] = $amenities[$unitAmenityId];
 //                }
 
+                $wpListingMetaKey = $unitType ? '_listing_unit_type_id' : '_listing_unit_id';
                 $post = $wpdb->get_row(
-                    "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_listing_unit_id' AND meta_value = '".$unit->id."' LIMIT 1;"
+                    "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '".$wpListingMetaKey."' AND meta_value = '".$unit->id."' LIMIT 1;"
                 );
                 if (isset($post->post_id)) {
                     $unitsUpdated++;
@@ -298,7 +342,7 @@ class pluginApi{
                 		( %d, %s, %s )
                 	",
                             [
-                                $post_id,'_listing_unit_id', $unit->id,
+                                $post_id,$wpListingMetaKey, $unit->id,
                                 $post_id,'_listing_complex_id', $unit->nodeId,
                                 $post_id,'_listing_complex_parent', $parent,
 
@@ -334,13 +378,13 @@ class pluginApi{
                                 $post_id,'_listing_min_weekly_rate', isset($unit->min_weekly_rate) ? $unit->min_weekly_rate : 0,
                                 $post_id,'_listing_max_weekly_rate', isset($unit->max_weekly_rate) ? $unit->max_weekly_rate : 0,
                                 $post_id,'_listing_domain', 'villatel',
-                                $post_id,'_listing_first_image', ($unit->images) ? $unit->images[0]->url :null,
-                                $post_id,'_listing_youtube_id', (!$youtube_id) ? null : $youtube_id,
-                                $post_id,'_listing_disable_sync_description', (!$custom_desc) ? null : $custom_desc,
-                                $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex) ? null : $yoast_linkdex,
-                                $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc) ? null : $yoast_metadesc,
-                                $post_id,'_yoast_wpseo_title', (!$yoast_title) ? null : $yoast_title,
-                                $post_id,'_yoast_wpseo_focuskw', (!$yoast_focuskw) ? null : $yoast_focuskw
+                                $post_id,'_listing_first_image', ($unit->images) ? $unit->images[0]->url : ' ',
+                                $post_id,'_listing_youtube_id', (!$youtube_id) ? ' ' : $youtube_id,
+                                $post_id,'_listing_disable_sync_description', (!$custom_desc) ? ' ' : $custom_desc,
+                                $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex) ? ' ' : $yoast_linkdex,
+                                $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc) ? ' ' : $yoast_metadesc,
+                                $post_id,'_yoast_wpseo_title', (!$yoast_title) ? ' ' : $yoast_title,
+                                $post_id,'_yoast_wpseo_focuskw', (!$yoast_focuskw) ? ' ' : $yoast_focuskw
                             ]
                         ));
 
@@ -357,7 +401,7 @@ class pluginApi{
                         'ping_status' => 'closed',
                         'post_modified' => $today,
                         'post_modified_gmt' => $today,
-                        'post_name' => $this->slugify($unit->name),
+                        'post_name' => $unitType ? $unit->custom->pms_unit_types_url : $this->slugify($unit->name),
                         'post_type' => 'listing',
                         'post_status' => 'publish'
                     ];
@@ -381,6 +425,7 @@ class pluginApi{
                     }
 
                     $group_id = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId) ? 'c-'.$unit->node : 'u-'.$unit->id;
+                    $group_id = $unitType ? 'ut'.substr($group_id, 1) : $group_id;
 
                     $wpdb->query(
                         "UPDATE ".$wpdb->prefix."posts set
@@ -435,6 +480,7 @@ class pluginApi{
 
                     $group_id = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId) ? 'c-'.$unit->node : 'u-'.$unit->id;
                     $parent = ($nodeTypeId > 0 && $unit->nodetype == $nodeTypeId) ? 0 : 1;
+                    $group_id = $unitType ? 'ut'.substr($group_id, 1) : $group_id;
 
                     $wpdb->query(
                         $wpdb->prepare(
@@ -455,7 +501,7 @@ class pluginApi{
                                 $today,
                                 $unit->name,
                                 $isDraft ? 'draft' : 'publish',
-                                $this->slugify($unit->name),
+                                $unitType ? $unit->custom->pms_unit_types_url : $this->slugify($unit->name),
                                 'listing',
                                 $group_id,
                                 $parent
@@ -510,7 +556,7 @@ class pluginApi{
                 		( %d, %s, %s )
                 	",
                             [
-                                $post_id,'_listing_unit_id', $unit->id,
+                                $post_id,$wpListingMetaKey, $unit->id,
                                 $post_id,'_listing_complex_id', $unit->nodeId,
                                 $post_id,'_listing_complex_parent', $parent,
 
@@ -546,13 +592,13 @@ class pluginApi{
                                 $post_id,'_listing_min_weekly_rate', isset($unit->min_weekly_rate) ? $unit->min_weekly_rate : 0,
                                 $post_id,'_listing_max_weekly_rate', isset($unit->max_weekly_rate) ? $unit->max_weekly_rate : 0,
                                 $post_id,'_listing_domain', 'villatel',
-                                $post_id,'_listing_first_image', ($unit->images) ? $unit->images[0]->url :null,
-                                $post_id,'_listing_youtube_id', (!$youtube_id) ? null : $youtube_id,
-                                $post_id,'_listing_disable_sync_description', (!$custom_desc) ? null : $custom_desc,
-                                $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex) ? null : $yoast_linkdex,
-                                $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc) ? null : $yoast_metadesc,
-                                $post_id,'_yoast_wpseo_title', (!$yoast_title) ? null : $yoast_title,
-                                $post_id,'_yoast_wpseo_focuskw', (!$yoast_focuskw) ? null : $yoast_focuskw
+                                $post_id,'_listing_first_image', ($unit->images) ? $unit->images[0]->url : ' ',
+                                $post_id,'_listing_youtube_id', (!$youtube_id) ? ' ' : $youtube_id,
+                                $post_id,'_listing_disable_sync_description', (!$custom_desc) ? ' ' : $custom_desc,
+                                $post_id,'_yoast_wpseo_linkdex', (!$yoast_linkdex) ? ' ' : $yoast_linkdex,
+                                $post_id,'_yoast_wpseo_metadesc', (!$yoast_metadesc) ? ' ' : $yoast_metadesc,
+                                $post_id,'_yoast_wpseo_title', (!$yoast_title) ? ' ' : $yoast_title,
+                                $post_id,'_yoast_wpseo_focuskw', (!$yoast_focuskw) ? ' ' : $yoast_focuskw
                             ]
                         ));
 
@@ -608,10 +654,10 @@ class pluginApi{
         return false;
     }
 
-    public function get_aggregate_availability_pricing_data($unit_id)
+    public function get_aggregate_availability_pricing_data($unit_id, $unit_type = false)
     {
-        $pricing = $this->get_unit_pricing($unit_id);
-        $availability = $this->get_unit_availability($unit_id);
+        $pricing = $this->get_unit_pricing($unit_id, $unit_type);
+        $availability = $this->get_unit_availability($unit_id, $unit_type);
         $rates = (array)$pricing->rateTypes[0]->rates;
         $rates_array = array();
         foreach ($availability as $idx => $day) {
@@ -633,20 +679,29 @@ class pluginApi{
         return $rates_array;
     }
 
-    public function get_unit_pricing($unit_id)
+    public function get_unit_pricing($unit_id, $unit_type = false)
     {
         $max_booking_days = env('TRACK_MAX_BOOKING_DAYS') ?: '720'; // default to 720 days
         $end_date = date('Y-m-d', strtotime('+'.$max_booking_days.' days'));
+        $endpoint = "/api/pms/units/$unit_id/pricing?"."endDate=$end_date";
+        if ($unit_type) {
+            $endpoint = "/api/pms/units/types/$unit_id/pricing?"."endDate=$end_date";
+        }
 
         return $this->request([
-            'endpoint' => "/api/pms/units/$unit_id/pricing?"."endDate=$end_date",
+            'endpoint' => $endpoint,
         ]);
     }
 
-    public function get_unit_availability($unit_id)
+    public function get_unit_availability($unit_id, $unit_type = false)
     {
+        $endpoint = "/api/v2/pms/units/$unit_id/availability";
+        if ($unit_type) {
+            $endpoint = "/api/v2/pms/units/$unit_id/availability";
+        }
+
         return $this->request([
-            'endpoint' => "/api/v2/pms/units/$unit_id/availability"
+            'endpoint' => $endpoint
         ]);
     }
 
@@ -668,12 +723,12 @@ class pluginApi{
         );
     }
 
-    public function getUnitNodes()
+    public function getUnitNodes($unitType = false)
     {
         global $wpdb;
 
         $nodes = $this->request([
-            'endpoint' => "/api/pms/nodes"
+            'endpoint' => "/api/pms/nodes?size=-1"
         ]);
 
         $wpdb->query("UPDATE ".$wpdb->prefix."track_node_types set active = 0");
@@ -719,18 +774,27 @@ class pluginApi{
                     );
                     $termId = $wpdb->insert_id;
 
+                    $parentNodeTermId = $this->getParentNodeTermId($node, $nodes->_embedded->nodes, $nodeTypeId);
                     $wpdb->insert(
                         $wpdb->prefix.'term_taxonomy',
-                        ['term_id' => $termId, 'taxonomy' => 'locations', 'parent' => 0],
+                        ['term_id' => $termId, 'taxonomy' => 'locations', 'parent' => $parentNodeTermId],
                         ['%d', '%s', '%d']
                     );
+                    wp_update_term($termId, 'locations', ['parent' => $parentNodeTermId]);
+
                     $term_taxonomy_id = $wpdb->insert_id;
 
-                    $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
+                    $nodeUnitsEndpoint = '/api/pms/units?size=-1&nodeId='.$node->id;
+                    if ($unitType) {
+                        $nodeUnitsEndpoint = '/api/pms/units/types?size=-1&nodeId='.$node->id;
+                    }
+                    $nodeUnits = $this->request(['endpoint' => $nodeUnitsEndpoint]);
                     if (isset($nodeUnits) && $nodeUnits->status !== 404) {
-                        foreach ($nodeUnits->_embedded->units as $unit) {
+                        $units = $unitType ? $nodeUnits->_embedded->unitTypes : $nodeUnits->_embedded->units;
+                        foreach ($units as $unit) {
+                            $groupId = $unitType ? 'ut-'.$unit->id : 'u-'.$unit->id;
                             $post = $wpdb->get_row(
-                                "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."';"
+                                "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."'  AND group_id ='".$groupId."' ;"
                             );
                             if ($post) {
                                 $wpdb->query(
@@ -756,47 +820,83 @@ class pluginApi{
                         ['%s', '%d', '%s'], ['%d']
                     );
 
-                    $term = $wpdb->get_row(
+                    $termTaxanomy = $wpdb->get_row(
                         "SELECT term_taxonomy_id FROM ".$wpdb->prefix."term_taxonomy
                 JOIN ".$wpdb->prefix."terms ON ".$wpdb->prefix."terms.term_id = ".$wpdb->prefix."term_taxonomy.term_id
                 WHERE node_id = '".$node->id."'  
                 LIMIT 1;"
                     );
 
-                    if ($term) {
+                    $parentNodeTermId = $this->getParentNodeTermId($node, $nodes->_embedded->nodes, $nodeTypeId);
+                    if (!$termTaxanomy) {
+                        $wpdb->insert(
+                            $wpdb->prefix.'term_taxonomy',
+                            ['term_id' => $term->term_id, 'taxonomy' => 'locations', 'parent' => $parentNodeTermId],
+                            ['%d', '%s', '%d']
+                        );
+                    } else {
+                        $wpdb->update(
+                            $wpdb->prefix.'term_taxonomy',
+                            ['parent' => $parentNodeTermId],
+                            ['term_id' => $term->term_id, 'taxonomy' => 'locations'],
+                            ['%d'], ['%d', '%s']
+                        );
+                    }
+                    wp_update_term($term->term_id, 'locations', ['parent' => $parentNodeTermId]);
+
+                    if ($termTaxanomy) {
                         $nodeTrackData = [
-                            'resort_metadata_website_description' => $node->custom->pms_nodes_resort_metadata_website_description,
-                            'resort_google_map_url' => $node->custom->pms_nodes_resort_google_map_url,
-                            'resort_locality' => $node->locality,
-                            'resort_street_address' => $node->streetAddress,
-                            'resort_postal' => $node->postal,
-                            'resort_country' => $node->country,
+                            'resort_metadata_website_description' => !isset($node->custom->pms_nodes_resort_metadata_website_description) ? '' : $node->custom->pms_nodes_resort_metadata_website_description,
+                            'resort_google_map_url' => !isset($node->custom->pms_nodes_resort_google_map_url) ? '' : $node->custom->pms_nodes_resort_google_map_url ?? '',
+                            'resort_locality' => !isset($node->locality) ? '' : $node->locality,
+                            'resort_street_address' => !isset($node->streetAddress) ? '' : $node->streetAddress,
+                            'resort_postal' => !isset($node->postal) ? '' : $node->postal,
+                            'resort_country' => !isset($node->country) ? '' : $node->country,
+                            'resort_latitude' => !isset($node->latitude) ? '' : $node->latitude,
+                            'resort_longitude' => !isset($node->longitude) ? '' : $node->longitude,
                         ];
+
+                        if ($node->amenities) {
+                            $nodeAmenities = [];
+                            foreach ($node->amenities as $nodeAmenity) {
+                                if ($nodeAmenity->group->name == 'Villatel (Resort Amenities - website only - SEO Schema)') {
+                                    $nodeAmenities [] = $nodeAmenity->name;
+                                }
+                            }
+                            $nodeTrackData['resort_amenities'] = $nodeAmenities;
+                        }
 
                         foreach ($nodeTrackData as $meta_key => $nodeTrackDataValue) {
                             update_term_meta(
-                                $term->term_taxonomy_id,
+                                $termTaxanomy->term_taxonomy_id,
                                 $meta_key,
                                 $nodeTrackDataValue
                             );
                         }
 
-                        $nodeUnits = $this->request(['endpoint' => '/api/pms/units?size=-1&nodeId='.$node->id]);
+                        $nodeUnitsEndpoint = '/api/pms/units?size=-1&nodeId='.$node->id;
+                        if ($unitType) {
+                            $nodeUnitsEndpoint = '/api/pms/units/types?size=-1&nodeId='.$node->id;
+                        }
+                        $nodeUnits = $this->request(['endpoint' => $nodeUnitsEndpoint]);
                         if (isset($nodeUnits)) {
                             if (isset($nodeUnits->status) && $nodeUnits->status !== 404) {
                                 return;
                             }
-                            foreach ($nodeUnits->_embedded->units as $unit) {
+                            $units = $unitType ? $nodeUnits->_embedded->unitTypes : $nodeUnits->_embedded->units;
+                            foreach ($units as $unit) {
+                                $groupId = $unitType ? 'ut-'.$unit->id : 'u-'.$unit->id;
+
                                 $post = $wpdb->get_row(
-                                    "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."';"
+                                    "SELECT ID FROM ".$wpdb->prefix."posts WHERE unit_id = '".$unit->id."'  AND group_id ='".$groupId."' ;"
                                 );
                                 if ($post) {
                                     $wpdb->query(
-                                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$term->term_taxonomy_id."';"
+                                        "DELETE FROM ".$wpdb->prefix."term_relationships WHERE object_id = '".$post->ID."' AND term_taxonomy_id = '".$termTaxanomy->term_taxonomy_id."';"
                                     );
                                     $wpdb->insert(
                                         $wpdb->prefix.'term_relationships',
-                                        ['object_id' => $post->ID, 'term_taxonomy_id' => $term->term_taxonomy_id],
+                                        ['object_id' => $post->ID, 'term_taxonomy_id' => $termTaxanomy->term_taxonomy_id],
                                         ['%d', '%d']
                                     );
                                 }
@@ -807,6 +907,48 @@ class pluginApi{
             }
         }
     }
+
+
+    /**
+     * Get or create parent node term_id
+     *
+     * @param $currentNode
+     * @param $nodesList
+     * @param $nodeTypeId
+     *
+     * @return int|string
+     */
+    public function getParentNodeTermId($currentNode, $nodesList, $nodeTypeId): int
+    {
+        global $wpdb;
+
+        $parentNodeTermId = 0;
+
+        if ($currentNode->parentId) {
+            $termIdParentNode = $wpdb->get_row(
+                "SELECT term_id FROM ".$wpdb->prefix."terms WHERE node_id = '".$currentNode->parentId."';"
+            );
+            if ($termIdParentNode) {
+                $parentNodeTermId = $termIdParentNode->term_id;
+            } else {
+                $parentNode = $nodesList[array_search($currentNode->parentId, array_column($nodesList, 'id'))];
+                $wpdb->insert(
+                    $wpdb->prefix.'terms',
+                    [
+                        'name' => $parentNode->name,
+                        'node_id' => $parentNode->id,
+                        'node_type_id' => $nodeTypeId,
+                        'slug' => self::slugify($parentNode->name)
+                    ],
+                    ['%s', '%d', '%d', '%s']
+                );
+                $parentNodeTermId = $wpdb->insert_id;
+            }
+        }
+
+        return $parentNodeTermId;
+    }
+
 
     public function getAmenities()
     {
