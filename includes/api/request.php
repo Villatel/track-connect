@@ -401,7 +401,7 @@ class pluginApi{
                         'ping_status' => 'closed',
                         'post_modified' => $today,
                         'post_modified_gmt' => $today,
-                        'post_name' => $this->slugify($unit->name),
+                        'post_name' => $unitType ? $unit->custom->pms_unit_types_url : $this->slugify($unit->name),
                         'post_type' => 'listing',
                         'post_status' => 'publish'
                     ];
@@ -501,7 +501,7 @@ class pluginApi{
                                 $today,
                                 $unit->name,
                                 $isDraft ? 'draft' : 'publish',
-                                $this->slugify($unit->name),
+                                $unitType ? $unit->custom->pms_unit_types_url : $this->slugify($unit->name),
                                 'listing',
                                 $group_id,
                                 $parent
