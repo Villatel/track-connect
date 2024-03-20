@@ -395,7 +395,7 @@ class pluginApi{
 
                     $my_post = [
                         'ID' => $post_id,
-                        'post_title' => $unit->name,
+                        'post_title' => $unitType ? $unit->custom->pms_unit_types_property_website_name : $unit->name,
                         'post_author' => 1,
                         'comment_status' => 'closed',
                         'ping_status' => 'closed',
@@ -499,7 +499,7 @@ class pluginApi{
                                 $today,
                                 $today,
                                 $today,
-                                $unit->name,
+                                $unitType ? $unit->custom->pms_unit_types_property_website_name : $ $unit->name,
                                 $isDraft ? 'draft' : 'publish',
                                 $unitType ? $unit->custom->pms_unit_types_url : $this->slugify($unit->name),
                                 'listing',
